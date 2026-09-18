@@ -206,7 +206,7 @@ function cmdRetrofit({ flags, positional }) {
   const claude = installClaudeTooling(dir);
 
   for (const f of [...shared.written, ...specific.written, ...claude]) log(`  + ${f}`);
-  const kept = [...shared.skipped, ...specific.skipped].filter((f) => /\.(config\.mjs|json)$/.test(f) || f.startsWith(".github/"));
+  const kept = [...new Set([...shared.skipped, ...specific.skipped])].filter((f) => /\.(config\.mjs|json)$/.test(f) || f.startsWith(".github/"));
   if (kept.length) {
     log("\nKept existing files (use --force to overwrite, or make them extend the engine):");
     for (const f of kept) log(`  = ${f}`);

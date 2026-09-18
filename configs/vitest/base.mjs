@@ -32,7 +32,7 @@ const base = {
       provider: "v8",
       enabled: false, // turned on by `vitest run --coverage` in test:unit
       all: true,
-      include: ["src/core/**", "src/adapters/**"],
+      include: ["src/core/**/*.{ts,tsx}", "src/adapters/**/*.{ts,tsx}"],
       exclude: [
         "**/*.test.*",
         "**/*.d.ts",

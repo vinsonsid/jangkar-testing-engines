@@ -53,7 +53,9 @@ node .testing-engines/bin/jangkar-test.mjs retrofit
 
 ## Branch protection (required)
 
-The gate only means something if the remote enforces it. For each project:
+The gate only means something if the remote enforces it. GitHub only allows branch protection on **public** repos or on **private** repos under a Pro/Team plan. If a project is private on the free plan, either make it public, upgrade the plan, or accept that the gate is advisory until then and never merge a red PR by hand.
+
+For each project:
 
 ```bash
 gh api -X PUT repos/OWNER/REPO/branches/main/protection \

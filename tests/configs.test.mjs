@@ -16,7 +16,7 @@ describe("vitest base config", () => {
   });
 
   it("scopes coverage to core and adapters only", () => {
-    expect(base.test.coverage.include).toStrictEqual(["src/core/**", "src/adapters/**"]);
+    expect(base.test.coverage.include).toStrictEqual(["src/core/**/*.{ts,tsx}", "src/adapters/**/*.{ts,tsx}"]);
   });
 
   it("does not pass with no tests", () => {
