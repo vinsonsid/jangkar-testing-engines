@@ -36,7 +36,10 @@ describe("stop-check hook", () => {
     expect(existsSync(join(project, "node_modules/@jangkar/testing-engines/package.json"))).toBe(true);
     const unit = spawnSync("npm", ["run", "test:unit"], { cwd: project, encoding: "utf8", env: { ...process.env, CI: "" } });
     expect(unit.status).toBe(0);
-    expect(unit.stdout).toMatch(/Statements\s*:\s*100%/);
+    // Assert on the JSON summary, not stdout: the text reporter's layout varies between local and CI.
+    const summary = JSON.parse(readFileSync(join(project, "coverage/coverage-summary.json"), "utf8")).total;
+    expect(summary.statements.pct).toBe(100);
+    expect(summary.branches.pct).toBe(100);
     const sys = spawnSync("npm", ["run", "test:system"], { cwd: project, encoding: "utf8" });
     expect(sys.status).toBe(0);
     const tc = spawnSync("npm", ["run", "typecheck"], { cwd: project, encoding: "utf8" });
