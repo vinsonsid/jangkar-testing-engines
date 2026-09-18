@@ -1,0 +1,29 @@
+{
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run --coverage tests/unit src",
+    "test:integration": "vitest run --passWithNoTests tests/integration",
+    "test:system": "vitest run --passWithNoTests tests/system",
+    "test:mutation": "stryker run",
+    "test:all": "npm run lint && npm run typecheck && npm run test:unit && npm run test:integration && npm run test:system",
+    "test:watch": "vitest",
+    "prepare": "simple-git-hooks"
+  },
+  "devDependencies": {
+    "@jangkar/testing-engines": "github:vinsonsid/jangkar-testing-engines#__ENGINE_VERSION__",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/eslint-plugin": "^1.6.0",
+    "eslint": "^10.0.0",
+    "simple-git-hooks": "^2.14.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^4.1.0"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "bash .claude/hooks/pre-commit.sh"
+  }
+}

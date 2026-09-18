@@ -1,0 +1,16 @@
+# Copied into each project as .github/workflows/quality-gate.yml by `jangkar-test`.
+name: quality-gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    uses: vinsonsid/jangkar-testing-engines/.github/workflows/quality-gate.yml@__ENGINE_VERSION__
+    secrets: inherit

@@ -1,0 +1,70 @@
+{
+  "name": "@jangkar/testing-engines",
+  "version": "0.1.0",
+  "description": "Shared testing engine: strict configs, CI quality gates, and Claude Code tooling that hold vibe-coded projects to a real quality bar.",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:vinsonsid/jangkar-testing-engines",
+  "bin": {
+    "jangkar-test": "./bin/jangkar-test.mjs"
+  },
+  "exports": {
+    "./vitest/base": "./configs/vitest/base.mjs",
+    "./vitest/node": "./configs/vitest/node.mjs",
+    "./vitest/react": "./configs/vitest/react.mjs",
+    "./vitest/setup": "./configs/vitest/setup.mjs",
+    "./eslint/base": "./configs/eslint/base.mjs",
+    "./eslint/tests": "./configs/eslint/tests.mjs",
+    "./eslint/next": "./configs/eslint/next.mjs",
+    "./tsconfig/strict": "./configs/tsconfig/strict.json",
+    "./tsconfig/next": "./configs/tsconfig/next.json",
+    "./stryker/base": "./configs/stryker/base.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "configs",
+    "ci",
+    "claude",
+    "templates",
+    "docs",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "example:test": "vitest run --config examples/tax-calc/vitest.config.mjs",
+    "example:mutation": "cd examples/tax-calc && npx stryker run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@stryker-mutator/core": ">=8",
+    "@stryker-mutator/vitest-runner": ">=8",
+    "@vitest/coverage-v8": ">=2",
+    "@vitest/eslint-plugin": ">=1",
+    "eslint": ">=9",
+    "typescript": ">=5",
+    "typescript-eslint": ">=8",
+    "vitest": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "@stryker-mutator/core": { "optional": true },
+    "@stryker-mutator/vitest-runner": { "optional": true }
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/eslint-plugin": "^1.6.0",
+    "eslint": "^10.0.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^4.1.0"
+  }
+}

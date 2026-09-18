@@ -1,0 +1,9 @@
+# Phase 2 placeholder. Reusable Playwright workflow lands here.
+name: e2e
+on:
+  workflow_call:
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "e2e gate arrives in phase 2"
