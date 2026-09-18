@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,13 +18,21 @@ export function cli(args, cwd) {
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
+/**
+ * Make a scaffolded project runnable without `npm install`: symlink every
+ * package from the engine's node_modules into the project, then register the
+ * engine itself under its package name. No network, no npm version quirks.
+ */
 export function npmLinkEngine(projectDir) {
-  // Real `npm install` of the engine from the local path plus vitest etc. is slow; instead use
-  // `npm install --no-audit --no-fund --install-links <engine>` which copies the engine in.
-  execFileSync("npm", ["install", "--no-audit", "--no-fund", "--no-save", "--install-links", ENGINE_ROOT], {
-    cwd: projectDir,
-    stdio: "pipe",
-  });
+  const src = join(ENGINE_ROOT, "node_modules");
+  const nm = join(projectDir, "node_modules");
+  mkdirSync(nm, { recursive: true });
+  for (const entry of readdirSync(src)) {
+    if (entry === "@jangkar") continue;
+    symlinkSync(join(src, entry), join(nm, entry), "dir");
+  }
+  mkdirSync(join(nm, "@jangkar"));
+  symlinkSync(ENGINE_ROOT, join(nm, "@jangkar", "testing-engines"), "dir");
 }
 
 export function git(args, cwd) {
