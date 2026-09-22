@@ -5,3 +5,6 @@ reports/
 dist/
 *.log
 .DS_Store
+.vitepress/dist/
+.vitepress/cache/
+.vercel/

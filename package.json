@@ -38,7 +38,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check": "npm run lint && npm run typecheck && npm test",
     "example:test": "vitest run --config examples/tax-calc/vitest.config.mjs",
-    "example:mutation": "cd examples/tax-calc && npx stryker run"
+    "example:mutation": "cd examples/tax-calc && npx stryker run",
+    "docs:dev": "vitepress dev .",
+    "docs:build": "vitepress build .",
+    "docs:preview": "vitepress preview ."
   },
   "engines": {
     "node": ">=20"
@@ -54,8 +57,12 @@
     "vitest": ">=2"
   },
   "peerDependenciesMeta": {
-    "@stryker-mutator/core": { "optional": true },
-    "@stryker-mutator/vitest-runner": { "optional": true }
+    "@stryker-mutator/core": {
+      "optional": true
+    },
+    "@stryker-mutator/vitest-runner": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@stryker-mutator/core": "^10.0.0",
@@ -66,6 +73,7 @@
     "eslint": "^10.0.0",
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.70.0",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.0"
   }
 }
