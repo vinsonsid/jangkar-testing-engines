@@ -2,7 +2,7 @@
 // jangkar-test: init | retrofit | doctor | upgrade
 // Plain Node, no dependencies, so it runs via `npx github:...` before install.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,6 +11,7 @@ const enginePkg = JSON.parse(readFileSync(join(ENGINE_ROOT, "package.json"), "ut
 const ENGINE_VERSION = `v${enginePkg.version}`;
 const ENGINE_REPO = "vinsonsid/jangkar-testing-engines";
 const MARK_BEGIN = "<!-- BEGIN:jangkar-testing-engines -->";
+const MARK_END = "<!-- END:jangkar-testing-engines -->";
 const STACKS = ["nextjs", "node-api"];
 const PHASE_LATER = { python: "phase 1b", "mobile-expo": "phase 2" };
 
@@ -93,22 +94,57 @@ function copyTemplate(srcDir, destDir, vars, { overwrite }) {
   return { written, skipped };
 }
 
+/** Files the engine owns inside an adopter: relative path -> engine source path. */
+function ownedClaudeFiles() {
+  const out = [];
+  for (const sub of ["skills", "agents", "hooks"]) {
+    const src = join(ENGINE_ROOT, "claude", sub);
+    for (const rel of walk(src)) {
+      if (rel === "settings.hooks.json") continue;
+      out.push({ rel: join(".claude", sub, rel), src: join(src, rel) });
+    }
+  }
+  return out;
+}
+
+function rulesBlock() {
+  return readFileSync(join(ENGINE_ROOT, "claude", "CLAUDE.testing.md"), "utf8").trim();
+}
+
+/** Replace the engine's block in CLAUDE.md text, or append it. Returns the new text. */
+function withRulesBlock(existing) {
+  const block = rulesBlock();
+  const begin = existing.indexOf(MARK_BEGIN);
+  const end = existing.indexOf(MARK_END);
+  if (begin !== -1 && end !== -1 && end > begin) {
+    return existing.slice(0, begin) + block + existing.slice(end + MARK_END.length);
+  }
+  return existing ? `${existing.trimEnd()}\n\n${block}\n` : `${block}\n`;
+}
+
+/**
+ * Install or refresh skills, agents, hooks, hook wiring, and the CLAUDE.md
+ * rules block. Idempotent. Returns { written, updated, unchanged } so callers
+ * can print an honest diff summary.
+ */
 function installClaudeTooling(dir) {
   const claudeDir = join(dir, ".claude");
   const written = [];
-  for (const sub of ["skills", "agents", "hooks"]) {
-    const src = join(ENGINE_ROOT, "claude", sub);
-    const dest = join(claudeDir, sub);
-    mkdirSync(dest, { recursive: true });
-    for (const rel of walk(src)) {
-      if (rel === "settings.hooks.json") continue;
-      const d = join(dest, rel);
-      mkdirSync(dirname(d), { recursive: true });
-      cpSync(join(src, rel), d);
-      written.push(relative(dir, d));
-    }
-  }
-  // Merge hook wiring into .claude/settings.json
+  const updated = [];
+  const unchanged = [];
+  const place = (rel, next) => {
+    const dest = join(dir, rel);
+    const before = existsSync(dest) ? readFileSync(dest, "utf8") : null;
+    if (before === next) return unchanged.push(rel);
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, next);
+    (before === null ? written : updated).push(rel);
+  };
+  for (const { rel, src } of ownedClaudeFiles()) place(rel, readFileSync(src, "utf8"));
+  // Hooks must stay executable after a text write.
+  for (const { rel } of ownedClaudeFiles()) if (rel.endsWith(".sh")) chmodSync(join(dir, rel), 0o755);
+
+  // Merge hook wiring into .claude/settings.json without touching other keys.
   const settingsPath = join(claudeDir, "settings.json");
   const settings = existsSync(settingsPath) ? readJson(settingsPath) : {};
   const wiring = readJson(join(ENGINE_ROOT, "claude", "hooks", "settings.hooks.json"));
@@ -118,18 +154,31 @@ function installClaudeTooling(dir) {
     const already = JSON.stringify(settings.hooks[event]).includes("stop-check.sh");
     if (!already) settings.hooks[event].push(...entries);
   }
-  writeJson(settingsPath, settings);
-  written.push(".claude/settings.json");
+  place(".claude/settings.json", JSON.stringify(settings, null, 2) + "\n");
 
-  // Append rules block to CLAUDE.md
+  // Rules block in CLAUDE.md: append if absent, replace if stale.
   const claudeMd = join(dir, "CLAUDE.md");
-  const block = readFileSync(join(ENGINE_ROOT, "claude", "CLAUDE.testing.md"), "utf8");
   const existing = existsSync(claudeMd) ? readFileSync(claudeMd, "utf8") : "";
-  if (!existing.includes(MARK_BEGIN)) {
-    writeFileSync(claudeMd, existing ? `${existing.trimEnd()}\n\n${block}` : block);
-    written.push("CLAUDE.md");
+  place("CLAUDE.md", withRulesBlock(existing));
+  return { written, updated, unchanged };
+}
+
+/** Owned files whose content differs from this engine version. */
+function claudeToolingDrift(dir) {
+  const drift = [];
+  for (const { rel, src } of ownedClaudeFiles()) {
+    const dest = join(dir, rel);
+    if (!existsSync(dest) || readFileSync(dest, "utf8") !== readFileSync(src, "utf8")) drift.push(rel);
   }
-  return written;
+  const claudeMd = join(dir, "CLAUDE.md");
+  if (existsSync(claudeMd)) {
+    const text = readFileSync(claudeMd, "utf8");
+    const begin = text.indexOf(MARK_BEGIN);
+    const end = text.indexOf(MARK_END);
+    const installed = begin !== -1 && end > begin ? text.slice(begin, end + MARK_END.length) : "";
+    if (installed !== rulesBlock()) drift.push("CLAUDE.md (rules block)");
+  }
+  return drift;
 }
 
 function mergePackageFragments(dir, stack, vars) {
@@ -173,7 +222,7 @@ function cmdInit({ flags, positional }) {
     `# ${vars.__PROJECT_NAME__}\n\nScaffolded by @jangkar/testing-engines ${ENGINE_VERSION} (${stack}).\n\n\`\`\`bash\nnpm install\nnpm run test:all\n\`\`\`\n\nRead \`CLAUDE.md\` before writing code. Spec first: \`/spec-first <feature>\`.\n`,
   );
   log(`Initialised ${stack} project in ${dir}`);
-  log(`  ${shared.written.length + specific.written.length + claude.length + 2} files written`);
+  log(`  ${shared.written.length + specific.written.length + claude.written.length + 2} files written`);
   log(`\nNext:\n  cd ${target}\n  npm install\n  npm run test:all\n  git init && gh repo create --private --source . --push\n  # then enable branch protection, see docs/adopting.md`);
 }
 
@@ -205,7 +254,8 @@ function cmdRetrofit({ flags, positional }) {
   }
   const claude = installClaudeTooling(dir);
 
-  for (const f of [...shared.written, ...specific.written, ...claude]) log(`  + ${f}`);
+  for (const f of [...shared.written, ...specific.written, ...claude.written]) log(`  + ${f}`);
+  for (const f of claude.updated) log(`  ~ ${f} (refreshed from engine ${ENGINE_VERSION})`);
   const kept = [...new Set([...shared.skipped, ...specific.skipped])].filter((f) => /\.(config\.mjs|json)$/.test(f) || f.startsWith(".github/"));
   if (kept.length) {
     log("\nKept existing files (use --force to overwrite, or make them extend the engine):");
@@ -291,6 +341,8 @@ function cmdDoctor({ positional, flags }) {
   add(existsSync(settingsPath) && JSON.stringify(readJson(settingsPath).hooks?.Stop ?? []).includes("stop-check.sh"), "Stop hook wired in .claude/settings.json");
   for (const s of ["spec-first", "test-review", "coverage-gaps", "system-test"]) add(existsSync(join(dir, `.claude/skills/${s}/SKILL.md`)), `skill /${s} installed`);
   add(existsSync(join(dir, ".claude/agents/test-auditor.md")), "test-auditor agent installed");
+  const drift = claudeToolingDrift(dir);
+  add(drift.length === 0, `Claude tooling matches engine ${ENGINE_VERSION}`, drift.length ? `stale: ${drift.join(", ")}. Run: npx jangkar-test upgrade` : "");
 
   const failures = checks.filter((c) => !c.ok);
   if (!flags.quiet) {
@@ -306,19 +358,32 @@ function cmdDoctor({ positional, flags }) {
 }
 
 function cmdUpgrade({ positional }) {
-  const tag = positional[0];
-  if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) fail("usage: jangkar-test upgrade vX.Y.Z");
   const dir = resolve(".");
   const pkgPath = join(dir, "package.json");
-  const pkg = readJson(pkgPath);
-  pkg.devDependencies ??= {};
-  pkg.devDependencies["@jangkar/testing-engines"] = `github:${ENGINE_REPO}#${tag}`;
-  writeJson(pkgPath, pkg);
-  const wf = join(dir, ".github/workflows/quality-gate.yml");
-  if (existsSync(wf)) {
-    writeFileSync(wf, readFileSync(wf, "utf8").replace(/(quality-gate\.yml@)\S+/, `$1${tag}`));
+  if (!existsSync(pkgPath)) fail("no package.json here");
+  const tag = positional[0];
+  if (tag && !/^v\d+\.\d+\.\d+$/.test(tag)) fail("usage: jangkar-test upgrade [vX.Y.Z]");
+
+  // 1. Re-pin, if a tag was given. Without one, refresh tooling from the installed engine.
+  if (tag) {
+    const pkg = readJson(pkgPath);
+    pkg.devDependencies ??= {};
+    pkg.devDependencies["@jangkar/testing-engines"] = `github:${ENGINE_REPO}#${tag}`;
+    writeJson(pkgPath, pkg);
+    const wf = join(dir, ".github/workflows/quality-gate.yml");
+    if (existsSync(wf)) writeFileSync(wf, readFileSync(wf, "utf8").replace(/(quality-gate\.yml@)\S+/, `$1${tag}`));
+    log(`Pinned engine to ${tag} in package.json${existsSync(wf) ? " and .github/workflows/quality-gate.yml" : ""}.`);
   }
-  log(`Pinned engine to ${tag}. Run: npm install && npx jangkar-test doctor`);
+
+  // 2. Refresh the files the engine owns, from the engine that is running now.
+  const { written, updated, unchanged } = installClaudeTooling(dir);
+  for (const f of written) log(`  + ${f}`);
+  for (const f of updated) log(`  ~ ${f}`);
+  log(`Claude tooling: ${written.length} added, ${updated.length} refreshed, ${unchanged.length} unchanged (engine ${ENGINE_VERSION}).`);
+  if (tag && tag !== ENGINE_VERSION) {
+    log(`\nThis refresh used the installed engine ${ENGINE_VERSION}. To get ${tag}'s tooling:\n  npm install && npx jangkar-test upgrade`);
+  }
+  log("\nNext:\n  npx jangkar-test doctor\n  git diff .claude CLAUDE.md   # review what changed");
 }
 
 function usage() {
@@ -327,7 +392,7 @@ function usage() {
   init --stack <${STACKS.join("|")}> <dir>   scaffold a new project
   retrofit [dir] [--stack s] [--force]     add the engine to an existing project
   doctor [dir] [--quiet]                   check a project against the standard (exit 1 on failure)
-  upgrade vX.Y.Z                           pin the project to another engine version
+  upgrade [vX.Y.Z]                         re-pin (optional) and refresh skills, hooks, and rules from the engine
 `);
 }
 

@@ -5,6 +5,7 @@
 //   export default [...base, ...tests];
 
 import tseslint from "typescript-eslint";
+import layering from "./layering.mjs";
 
 export default tseslint.config(
   {
@@ -48,4 +49,6 @@ export default tseslint.config(
       "no-console": "off",
     },
   },
+  // Layering rule: core has no I/O, adapters never import app. See layering.mjs.
+  ...layering,
 );

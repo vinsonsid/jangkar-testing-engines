@@ -1,6 +1,6 @@
 {
   "name": "@jangkar/testing-engines",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared testing engine: strict configs, CI quality gates, and Claude Code tooling that hold vibe-coded projects to a real quality bar.",
   "type": "module",
   "license": "MIT",
@@ -16,6 +16,7 @@
     "./eslint/base": "./configs/eslint/base.mjs",
     "./eslint/tests": "./configs/eslint/tests.mjs",
     "./eslint/next": "./configs/eslint/next.mjs",
+    "./eslint/layering": "./configs/eslint/layering.mjs",
     "./tsconfig/strict": "./configs/tsconfig/strict.json",
     "./tsconfig/next": "./configs/tsconfig/next.json",
     "./stryker/base": "./configs/stryker/base.mjs",

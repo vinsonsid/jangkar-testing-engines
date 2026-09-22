@@ -32,12 +32,13 @@ If logic is hard to test, it is in the wrong layer. Move it to `core`.
 | Gate | Threshold | Enforced by |
 |---|---|---|
 | Lint | zero errors, zero warnings | `eslint` with `configs/eslint/base` + `tests` |
+| Layering | `core` imports no I/O, framework, SDK, `adapters`, or `app`; `adapters` import no `app` | `configs/eslint/layering` (in `base`) |
 | Types | zero errors under `configs/tsconfig/strict` | `tsc --noEmit` |
 | Unit + integration | all green, no `.only`, no `.skip` | `vitest run`, `allowOnly: false` in CI, lint rules |
 | Coverage on `core` + `adapters` | 80% lines, branches, functions, statements | `vitest --coverage` thresholds |
 | Mutation score on `core` | 70% break, 75% low, 90% high | Stryker on PRs touching `src/core` |
 | System tests | all green | `vitest run tests/system` |
-| `doctor` | zero violations | `jangkar-test doctor` as first CI step |
+| `doctor` | zero violations, Claude tooling matches the pinned engine | `jangkar-test doctor` as first CI step |
 
 ## 5. Forbidden
 

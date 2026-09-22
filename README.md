@@ -19,6 +19,7 @@ Three mechanisms, in order of importance:
 | `docs/testing-standard.md` | The contract every project must meet. Start here. |
 | `docs/architecture-for-testability.md` | The `core` / `adapters` / `app` layering rule. |
 | `docs/adopting.md` | New project and retrofit walkthrough, branch protection. |
+| `docs/roadmap.md` | The grand plan: phases, exit criteria, open decisions. |
 | `configs/` | Importable Vitest, ESLint, TypeScript, Stryker configs. |
 | `ci/github/quality-gate.yml` | Reusable GitHub Actions workflow (mirrored in `.github/workflows/`). |
 | `claude/` | `CLAUDE.md` rules block, skills, the auditor agent, Stop and pre-commit hooks. |
@@ -38,7 +39,7 @@ npx github:vinsonsid/jangkar-testing-engines init --stack nextjs my-app
 Existing project:
 
 ```bash
-npm i -D github:vinsonsid/jangkar-testing-engines#v0.1.0
+npm i -D github:vinsonsid/jangkar-testing-engines#v0.2.0
 npx jangkar-test retrofit
 npx jangkar-test doctor
 ```
@@ -47,9 +48,7 @@ Then enable branch protection. See `docs/adopting.md`.
 
 ## Roadmap
 
-- **Phase 1 (this release):** business logic. Unit, integration, system tests. Node and Next.js stacks.
-- **Phase 1b:** Python backend (pytest, ruff, mypy, mutmut).
-- **Phase 2:** frontend and mobile. Playwright, React Testing Library, Expo + Maestro, visual regression.
+See `docs/roadmap.md`. In short: prove the gate on a real feature, make every rule mechanical (v0.2), then Python, frontend and mobile, LLM evals, and fleet upgrades.
 
 ## Developing the engine
 

@@ -16,6 +16,7 @@ This project uses `@jangkar/testing-engines`. The full standard is in `node_modu
 - `src/core/`: no I/O, no `await` on external calls, no imports from `@supabase/*`, `next/*`, `@anthropic-ai/*`, `node:fs`, `fetch`. Inject time, ids, and randomness as parameters.
 - `src/adapters/`: thin wrappers over the outside world. No business logic.
 - Logic that is hard to test is in the wrong layer. Move it to `core`.
+- Lint enforces this. A restricted-import or restricted-global error in `src/core` means the code is in the wrong layer, not that the rule needs an exception.
 
 ## Forbidden in committed code
 

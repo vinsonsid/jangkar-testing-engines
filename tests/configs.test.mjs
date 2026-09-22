@@ -46,6 +46,17 @@ describe("eslint configs", () => {
     expect(rules["@typescript-eslint/ban-ts-comment"][1]["ts-ignore"]).toBe(true);
   });
 
+  it("base includes the layering rule for core and adapters", () => {
+    const core = eslintBase.find((c) => c.name === "jangkar/layering/core");
+    const adapters = eslintBase.find((c) => c.name === "jangkar/layering/adapters");
+    expect(core.files).toStrictEqual(["**/src/core/**/*.{ts,tsx,js,mjs}"]);
+    const groups = core.rules["no-restricted-imports"][1].patterns.flatMap((p) => p.group);
+    for (const banned of ["@supabase/*", "next", "@anthropic-ai/*", "node:*", "**/adapters/**", "**/app/**"]) expect(groups).toContain(banned);
+    expect(core.rules["no-restricted-globals"].slice(1).map((g) => g.name)).toContain("fetch");
+    expect(core.rules["no-restricted-syntax"].slice(1).map((r) => r.selector).join(" ")).toMatch(/Date.*now/);
+    expect(adapters.rules["no-restricted-imports"][1].patterns.flatMap((p) => p.group)).toContain("**/app/**");
+  });
+
   it("tests config forbids focused, disabled, and conditional tests", () => {
     const rules = eslintTests[0].rules;
     for (const r of ["vitest/no-focused-tests", "vitest/no-disabled-tests", "vitest/no-conditional-expect", "vitest/expect-expect"]) {

@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { cli, tmp } from "./helpers.mjs";
+import { spawnSync } from "node:child_process";
+import { cli, npmLinkEngine, tmp } from "./helpers.mjs";
 
 const ENGINE_VERSION = `v${JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version}`;
 
@@ -47,6 +48,24 @@ describe("jangkar-test init", () => {
     const r = cli(["doctor", project], t.dir);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("all");
+  });
+
+  it("lint fails when core imports I/O, reads the clock, or reaches into adapters", () => {
+    npmLinkEngine(project);
+    const bad = join(project, "src/core/bad.ts");
+    writeFileSync(bad, [
+      'import { readFileSync } from "node:fs";',
+      "export function bad(): number {",
+      "  void readFileSync;",
+      "  return Date.now();",
+      "}",
+      "",
+    ].join("\n"));
+    const r = spawnSync(process.execPath, [join(project, "node_modules/eslint/bin/eslint.js"), "src/core/bad.ts"], { cwd: project, encoding: "utf8" });
+    rmSync(bad);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("core must not use Node I/O");
+    expect(r.stdout).toContain("core must not read the clock");
   });
 
   it("fails doctor once a focused test is added", () => {
@@ -129,10 +148,34 @@ describe("jangkar-test retrofit", () => {
     expect(r.status).toBe(0);
   });
 
-  it("upgrade re-pins the engine in package.json and the workflow", () => {
+  it("doctor reports drift when an owned skill or the rules block is edited", () => {
+    const skill = join(t.dir, ".claude/skills/spec-first/SKILL.md");
+    writeFileSync(skill, readFileSync(skill, "utf8") + "\nlocal edit\n");
+    const md = join(t.dir, "CLAUDE.md");
+    writeFileSync(md, readFileSync(md, "utf8").replace("## Honesty", "## Honesty (edited)"));
+    const r = cli(["doctor"], t.dir);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("stale: .claude/skills/spec-first/SKILL.md, CLAUDE.md (rules block)");
+  });
+
+  it("upgrade without a tag refreshes drifted tooling and keeps the rest of CLAUDE.md", () => {
+    const r = cli(["upgrade"], t.dir);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("~ .claude/skills/spec-first/SKILL.md");
+    expect(r.stdout).toContain("~ CLAUDE.md");
+    const md = readFileSync(join(t.dir, "CLAUDE.md"), "utf8");
+    expect(md.startsWith("# legacy\n\nexisting rules")).toBe(true);
+    expect(md).not.toContain("(edited)");
+    expect(md.match(/BEGIN:jangkar-testing-engines/g)).toHaveLength(1);
+    expect(cli(["doctor"], t.dir).status).toBe(0);
+  });
+
+  it("upgrade with a tag re-pins package.json and the workflow, then refreshes", () => {
     const r = cli(["upgrade", "v9.9.9"], t.dir);
     expect(r.status).toBe(0);
     expect(JSON.parse(readFileSync(join(t.dir, "package.json"), "utf8")).devDependencies["@jangkar/testing-engines"]).toBe("github:vinsonsid/jangkar-testing-engines#v9.9.9");
     expect(readFileSync(join(t.dir, ".github/workflows/quality-gate.yml"), "utf8")).toContain("quality-gate.yml@v9.9.9");
+    expect(r.stdout).toContain("0 refreshed");
+    expect(r.stdout).toContain("To get v9.9.9's tooling");
   });
 });

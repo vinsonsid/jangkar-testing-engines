@@ -16,7 +16,7 @@ Stacks available in phase 1: `nextjs`, `node-api`. `python` and `mobile-expo` ar
 From the project root:
 
 ```bash
-npm install --save-dev github:vinsonsid/jangkar-testing-engines#v0.1.0
+npm install --save-dev github:vinsonsid/jangkar-testing-engines#v0.2.0
 npx jangkar-test retrofit
 npm install
 npm run test:all
@@ -39,10 +39,14 @@ Run `npx jangkar-test doctor` afterwards. It exits non-zero until the project me
 Projects pin the engine to a git tag. Upgrades are explicit:
 
 ```bash
-npx jangkar-test upgrade v0.2.0
-npm install
+npx jangkar-test upgrade v0.2.0   # re-pin package.json and the CI caller
+npm install                        # fetch that engine version
+npx jangkar-test upgrade           # refresh skills, agents, hooks, rules block from it
 npx jangkar-test doctor
+git diff .claude CLAUDE.md         # review what the engine changed
 ```
+
+`upgrade` only touches files the engine owns: `.claude/skills/*`, `.claude/agents/*`, `.claude/hooks/*`, the hook wiring in `.claude/settings.json`, and the block between the `BEGIN`/`END` markers in `CLAUDE.md`. Everything else in those files is yours. `doctor` fails when an owned file has drifted from the pinned engine, so local edits to a skill must go upstream.
 
 If you prefer a submodule (for Python or non-npm projects):
 
