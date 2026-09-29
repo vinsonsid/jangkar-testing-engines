@@ -8,3 +8,4 @@ dist/
 .vitepress/dist/
 .vitepress/cache/
 .vercel/
+.env*
