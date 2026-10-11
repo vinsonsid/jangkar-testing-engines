@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.2.0 — unreleased
+## 0.3.0 — unreleased
+
+Phase 1 hardening, second slice. Adds gates; upgrading adopters pass them with `npx jangkar-test upgrade v0.3.0` (adds the PR template) and by fixing any test `doctor` now names.
+
+- **`doctor` covers the rest of section 5.** New failures: commented-out tests, imports from `__mocks__`, `@ts-expect-error` without a description, and unit tests whose only assertions are snapshots.
+- **Flakiness policy.** `vitest/base` sets `retry: 0` and excludes `tests/quarantine/`. `doctor` fails on `retry` above 0 in the project config, and on any quarantined test without a `// quarantined: YYYY-MM-DD <issue URL>` label or older than 14 days.
+- **PR template.** `.github/pull_request_template.md` with the Definition of Done is scaffolded by `init`/`retrofit`, added by `upgrade` when missing (never overwritten), and required by `doctor`.
+- **`doctor --json`.** Same checks and exit code, machine-readable, for CI and the phase 4 fleet tool.
+- **Coverage per directory.** The quality-gate step summary reports `src/core`, `src/adapters`, and the total in separate columns.
+
+## 0.2.0 — 2026-09-29
 
 Phase 1 hardening, first slice. Closes the two largest gaps in the roadmap.
 

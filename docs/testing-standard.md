@@ -38,6 +38,8 @@ If logic is hard to test, it is in the wrong layer. Move it to `core`.
 | Coverage on `core` + `adapters` | 80% lines, branches, functions, statements | `vitest --coverage` thresholds |
 | Mutation score on `core` | 70% break, 75% low, 90% high | Stryker on PRs touching `src/core` |
 | System tests | all green | `vitest run tests/system` |
+| Flakiness | `retry: 0`; a flaky test moves to `tests/quarantine/` with `// quarantined: YYYY-MM-DD <issue URL>` and leaves within 14 days | `configs/vitest/base`, `doctor` |
+| PR template | `.github/pull_request_template.md` carries the Definition of Done (section 8) | `doctor`, installed by `init`/`retrofit`/`upgrade` |
 | `doctor` | zero violations, Claude tooling matches the pinned engine | `jangkar-test doctor` as first CI step |
 
 ## 5. Forbidden
@@ -53,6 +55,7 @@ These are lint errors or `doctor` failures. They do not need a reviewer to catch
 - `console.error` during a passing test in CI
 - Tests that import from `__mocks__` of the implementation they test
 - Commented-out tests
+- Retrying failing tests (`retry` above 0) instead of quarantining them
 
 ## 6. Allowed mocking
 

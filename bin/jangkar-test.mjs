@@ -14,6 +14,7 @@ const MARK_BEGIN = "<!-- BEGIN:jangkar-testing-engines -->";
 const MARK_END = "<!-- END:jangkar-testing-engines -->";
 const STACKS = ["nextjs", "node-api"];
 const PHASE_LATER = { python: "phase 1b", "mobile-expo": "phase 2" };
+const QUARANTINE_DAYS = 14;
 
 const log = (...a) => console.log(...a);
 const fail = (msg) => {
@@ -312,12 +313,21 @@ function cmdDoctor({ positional, flags }) {
     [/@ts-ignore/, "@ts-ignore"],
     [/\/\*\s*(v8|istanbul)\s+ignore/, "coverage ignore comment"],
     [/vi\.mock\(\s*["'][^"']*\/core\//, "mocking a core module"],
+    [/@ts-expect-error\s*$/m, "@ts-expect-error without a description"],
+    [/^\s*\/\/\s*(it|test|describe)(\.\w+)?\s*\(/m, "commented-out test"],
+    [/(from\s+|import\s*\(\s*|require\s*\(\s*)["'][^"']*__mocks__/, "import from __mocks__"],
   ];
   for (const f of all) {
     const text = readFileSync(join(dir, f), "utf8");
     for (const [re, label] of patterns) {
       const m = text.match(re);
       if (m) forbidden.push(`${f}: ${label}`);
+    }
+    // Snapshot as the only assertion is not a test of business logic.
+    if (f.startsWith(join("tests", "unit"))) {
+      const expects = (text.match(/\bexpect\s*\(/g) ?? []).length;
+      const snaps = (text.match(/\.to(Match|MatchInline|MatchFile)Snapshot\s*\(/g) ?? []).length;
+      if (snaps > 0 && snaps >= expects) forbidden.push(`${f}: snapshot is the only assertion`);
     }
   }
   add(forbidden.length === 0, "no forbidden patterns in tests", forbidden.join("; "));
@@ -330,11 +340,31 @@ function cmdDoctor({ positional, flags }) {
   const brk = strykerCfg.match(/\bbreak\s*:\s*(\d+)/);
   add(!brk || Number(brk[1]) >= 70, "mutation break threshold not lowered below 70", brk ? `break=${brk[1]}` : "");
   add(!/allowOnly\s*:\s*true|passWithNoTests\s*:\s*true/.test(vitestCfg), "vitest config does not disable allowOnly/passWithNoTests guards");
+  const retry = vitestCfg.match(/\bretry\s*:\s*(\d+)/);
+  add(!retry || Number(retry[1]) === 0, "vitest config does not retry failing tests", retry ? `retry=${retry[1]}; quarantine flaky tests instead` : "");
+
+  // Quarantine: every file names its issue and date, and leaves within QUARANTINE_DAYS.
+  const qDir = join(dir, "tests", "quarantine");
+  const stale = [];
+  if (existsSync(qDir)) {
+    for (const f of walk(qDir).filter((x) => /\.test\.(ts|tsx|js|mjs)$/.test(x))) {
+      const text = readFileSync(join(qDir, f), "utf8");
+      const date = text.match(/quarantined:\s*(\d{4}-\d{2}-\d{2})/);
+      const issue = /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/\d+/.test(text);
+      const ageDays = date ? (Date.now() - Date.parse(`${date[1]}T00:00:00Z`)) / 86_400_000 : NaN;
+      if (!date || !issue) stale.push(`${f}: needs "// quarantined: YYYY-MM-DD <issue URL>"`);
+      else if (!(ageDays <= QUARANTINE_DAYS)) stale.push(`${f}: quarantined ${date[1]}, over ${QUARANTINE_DAYS} days`);
+    }
+  }
+  add(stale.length === 0, `tests/quarantine/ is labelled and under ${QUARANTINE_DAYS} days old`, stale.join("; "));
 
   const wf = join(dir, ".github/workflows/quality-gate.yml");
   add(existsSync(wf) && readFileSync(wf, "utf8").includes(`${ENGINE_REPO}/.github/workflows/quality-gate.yml@`), "CI calls the engine quality-gate workflow", "npx jangkar-test retrofit");
 
   const claudeMd = join(dir, "CLAUDE.md");
+  const prTemplate = join(dir, ".github/pull_request_template.md");
+  add(existsSync(prTemplate) && readFileSync(prTemplate, "utf8").includes("Definition of Done"), "PR template carries the Definition of Done", "npx jangkar-test upgrade");
+
   add(existsSync(claudeMd) && readFileSync(claudeMd, "utf8").includes(MARK_BEGIN), "CLAUDE.md contains the testing rules block");
   add(existsSync(join(dir, ".claude/hooks/stop-check.sh")), ".claude/hooks/stop-check.sh installed");
   const settingsPath = join(dir, ".claude/settings.json");
@@ -345,6 +375,11 @@ function cmdDoctor({ positional, flags }) {
   add(drift.length === 0, `Claude tooling matches engine ${ENGINE_VERSION}`, drift.length ? `stale: ${drift.join(", ")}. Run: npx jangkar-test upgrade` : "");
 
   const failures = checks.filter((c) => !c.ok);
+  if (flags.json) {
+    // Machine-readable report for CI summaries and the fleet tool. Same exit code.
+    log(JSON.stringify({ engine: ENGINE_VERSION, ok: failures.length === 0, passed: checks.length - failures.length, failed: failures.length, checks }, null, 2));
+    process.exit(failures.length ? 1 : 0);
+  }
   if (!flags.quiet) {
     for (const c of checks) log(`  ${c.ok ? "✓" : "✗"} ${c.name}${!c.ok && c.hint ? `  (${c.hint})` : ""}`);
     log("");
@@ -377,6 +412,13 @@ function cmdUpgrade({ positional }) {
 
   // 2. Refresh the files the engine owns, from the engine that is running now.
   const { written, updated, unchanged } = installClaudeTooling(dir);
+  // Files a new release adds to the scaffold arrive once; an existing copy is the project's.
+  const prTemplate = ".github/pull_request_template.md";
+  if (!existsSync(join(dir, prTemplate))) {
+    mkdirSync(join(dir, ".github"), { recursive: true });
+    writeFileSync(join(dir, prTemplate), readFileSync(join(ENGINE_ROOT, "templates", "_shared", prTemplate), "utf8"));
+    written.push(prTemplate);
+  }
   for (const f of written) log(`  + ${f}`);
   for (const f of updated) log(`  ~ ${f}`);
   log(`Claude tooling: ${written.length} added, ${updated.length} refreshed, ${unchanged.length} unchanged (engine ${ENGINE_VERSION}).`);
@@ -391,7 +433,7 @@ function usage() {
 
   init --stack <${STACKS.join("|")}> <dir>   scaffold a new project
   retrofit [dir] [--stack s] [--force]     add the engine to an existing project
-  doctor [dir] [--quiet]                   check a project against the standard (exit 1 on failure)
+  doctor [dir] [--quiet|--json]            check a project against the standard (exit 1 on failure)
   upgrade [vX.Y.Z]                         re-pin (optional) and refresh skills, hooks, and rules from the engine
 `);
 }

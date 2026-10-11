@@ -57,17 +57,17 @@ Goal: every rule in `testing-standard.md` sections 2, 5, and 6 fails CI without 
 Gates to add:
 
 - **Layering as a lint rule.** Done in v0.2.0 as `configs/eslint/layering.mjs`. `no-restricted-imports` scoped to `src/core/**` banning `@supabase/*`, `next/*`, `@anthropic-ai/*`, `node:*`, `fetch`, and any `../adapters` or `../app` path. Same for `src/adapters/**` importing `app`. Consider `dependency-cruiser` if the ESLint rule cannot express "no I/O".
-- **Doctor covers the rest of section 5.** Commented-out tests, `console.error` in passing tests (Vitest `onConsoleLog` fail), snapshot-only assertions in `tests/unit`, `__mocks__` of the module under test, `it.todo` on a merged branch.
-- **Flakiness policy.** `retry: 0` everywhere. A test that fails on rerun without a code change is quarantined by moving it to `tests/quarantine/` with an issue link, and `doctor` fails if quarantine is older than 14 days.
+- **Doctor covers the rest of section 5.** Done in v0.3.0 except `it.todo` on merged branches (already a doctor failure everywhere). Commented-out tests, `console.error` in passing tests (Vitest `onConsoleLog` fail), snapshot-only assertions in `tests/unit`, `__mocks__` of the module under test, `it.todo` on a merged branch.
+- **Flakiness policy.** Done in v0.3.0, using a `// quarantined: YYYY-MM-DD <issue URL>` label instead of git history so shallow CI clones give the same answer. `retry: 0` everywhere. A test that fails on rerun without a code change is quarantined by moving it to `tests/quarantine/` with an issue link, and `doctor` fails if quarantine is older than 14 days.
 - **Time budgets.** Unit suite under 60 s, integration under 5 min, in CI. A budget breach is a warning first, an error after phase 1 exit.
-- **Coverage per directory.** Report `src/core` and `src/adapters` separately in the step summary so a well-covered `core` cannot hide an untested adapter.
+- **Coverage per directory.** Done in v0.3.0. Report `src/core` and `src/adapters` separately in the step summary so a well-covered `core` cannot hide an untested adapter.
 - **Incremental mutation by default.** Stryker incremental cache is already restored in CI. Make the PR job run on changed `core` files only and the nightly run do the full set with a trend line.
 
 Tooling to add:
 
 - **`upgrade` that refreshes.** Done in v0.2.0. Re-pins, re-copies skills, agents, hooks, and the rules block between the `BEGIN/END` markers, and prints what changed. `doctor` fails on drift from the installed engine.
-- **`doctor --ci` JSON output** so a fleet tool (phase 4) can read it.
-- **PR template** with the Definition of Done from section 8, installed by `retrofit`.
+- **`doctor --json` output** so a fleet tool (phase 4) can read it. Done in v0.3.0.
+- **PR template** with the Definition of Done from section 8, installed by `retrofit`. Done in v0.3.0; `upgrade` adds it when missing and `doctor` requires it.
 - **Anthropic fixtures.** An `msw` handler set plus a `record` helper that captures a real call once into `tests/fixtures/anthropic/*.json` and replays it after. Needed for `yespajak` now, generalises to phase 3.
 - **Supabase integration recipe.** A documented `tests/integration/setup.ts` that resets the local database per file, plus a seed convention, so adapter tests do not leak state.
 

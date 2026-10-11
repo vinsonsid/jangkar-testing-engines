@@ -39,7 +39,7 @@ npx github:vinsonsid/jangkar-testing-engines init --stack nextjs my-app
 Existing project:
 
 ```bash
-npm i -D github:vinsonsid/jangkar-testing-engines#v0.2.0
+npm i -D github:vinsonsid/jangkar-testing-engines#v0.3.0
 npx jangkar-test retrofit
 npx jangkar-test doctor
 ```
