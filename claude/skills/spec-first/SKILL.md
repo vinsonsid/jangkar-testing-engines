@@ -39,6 +39,12 @@ Do not write, edit, or scaffold implementation code in this invocation. Not a st
    ## Edge cases and failure modes
    - <empty input, boundaries, invalid state transitions, concurrency, locale, rounding>
 
+   ## Boundary table
+   | Input | Type | Below | At | Above | Rounding / unit | AC |
+   |---|---|---|---|---|---|---|
+   | omzet | money | 4 799 999 999 | 4 800 000 000 | 4 800 000 001 | floor to rupiah | AC2, AC3 |
+   | tanggal | date | 2024-12-31 | 2025-01-01 | 2025-01-02 | Asia/Jakarta, no DST | AC4 |
+
    ## Out of scope
    - ...
 
@@ -46,10 +52,13 @@ Do not write, edit, or scaffold implementation code in this invocation. Not a st
    - ...
    ```
 
-   Aim for at least one acceptance criterion per branch of behavior and at least three edge cases. Business logic that handles money, dates, or tax needs boundary cases at every rounding and threshold.
+   Aim for at least one acceptance criterion per branch of behavior and at least three edge cases.
+
+   **Boundary table rules.** Every money, date, percentage, count, or string-length input gets a row. Every threshold the spec mentions (a tax bracket, a cutoff date, a maximum length, a zero) gets its three values: one below, exactly at, one above. The rounding column states the policy and its unit (`floor to rupiah`, `half up to 2 dp`, `truncate to day`) or `none`. Write `n/a` in a cell only with a reason. A feature with no such inputs says `No numeric or date inputs` instead of the table. Each row names the AC that depends on it, and step 3 turns each of the three cells into an `it()`.
 
 3. **Write the failing tests.** One test file per module under `tests/unit/` for `core`, `tests/integration/` for `adapters`, and one `tests/system/<feature>.system.test.ts` if the feature is a user-facing use case. Rules:
    - Each acceptance criterion maps to at least one `it()` whose title starts with the AC id: `it("AC1: rejects negative amounts", ...)`.
+   - Each boundary-table row maps to three `it()` cases (below, at, above), each asserting the exact value, not a range.
    - Assertions are specific: `toStrictEqual({ ok: false, error: "NEGATIVE_AMOUNT" })`, not `toBeDefined()`.
    - No mocks of `core`. Adapters use the real local dependency.
    - Import the intended public API by its intended path even though it does not exist yet.

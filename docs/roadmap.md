@@ -73,9 +73,9 @@ Tooling to add:
 
 Skills and agents:
 
-- `/spec-first` gains a "boundary table" section for money, date, and tax inputs so rounding edges are always enumerated.
-- `test-auditor` gains a fixed checklist output (tautology, mocked-away logic, missing edge, assertion strength, layering violation) with a pass or fail per item, so its report is comparable across runs.
-- New `/mutation-survivors`: reads the Stryker report and turns each surviving mutant into a proposed test.
+- Done in v0.4.0. `/spec-first` gains a "boundary table" section for money, date, and tax inputs so rounding edges are always enumerated.
+- Done in v0.4.0. `test-auditor` gains a fixed checklist output (tautology, mocked-away logic, missing edge, assertion strength, layering violation) with a pass or fail per item, so its report is comparable across runs.
+- Done in v0.4.0. New `/mutation-survivors`: reads the Stryker report and turns each surviving mutant into a proposed test.
 
 Exit criteria:
 
