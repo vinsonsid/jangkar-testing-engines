@@ -159,7 +159,9 @@ describe("jangkar-test retrofit", () => {
   });
 
   it("upgrade without a tag refreshes drifted tooling and keeps the rest of CLAUDE.md", () => {
+    rmSync(join(t.dir, ".github/pull_request_template.md"));
     const r = cli(["upgrade"], t.dir);
+    expect(r.stdout).toContain("+ .github/pull_request_template.md");
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("~ .claude/skills/spec-first/SKILL.md");
     expect(r.stdout).toContain("~ CLAUDE.md");
@@ -171,11 +173,107 @@ describe("jangkar-test retrofit", () => {
   });
 
   it("upgrade with a tag re-pins package.json and the workflow, then refreshes", () => {
+    const tpl = join(t.dir, ".github/pull_request_template.md");
+    writeFileSync(tpl, readFileSync(tpl, "utf8") + "\nproject-specific checklist\n");
+    const custom = readFileSync(tpl, "utf8");
     const r = cli(["upgrade", "v9.9.9"], t.dir);
     expect(r.status).toBe(0);
+    expect(readFileSync(tpl, "utf8")).toBe(custom);
     expect(JSON.parse(readFileSync(join(t.dir, "package.json"), "utf8")).devDependencies["@jangkar/testing-engines"]).toBe("github:vinsonsid/jangkar-testing-engines#v9.9.9");
     expect(readFileSync(join(t.dir, ".github/workflows/quality-gate.yml"), "utf8")).toContain("quality-gate.yml@v9.9.9");
     expect(r.stdout).toContain("0 refreshed");
     expect(r.stdout).toContain("To get v9.9.9's tooling");
+  });
+});
+
+describe("jangkar-test doctor: section 5 checks, quarantine, PR template, --json", () => {
+  let t;
+  let project;
+  beforeAll(() => {
+    t = tmp();
+    project = join(t.dir, "probe");
+    const r = cli(["init", "--stack", "node-api", project], t.dir);
+    if (r.status !== 0) throw new Error(r.stderr);
+  });
+  afterAll(() => t.cleanup());
+
+  /** Write a file, run `doctor --json`, remove the file, return the parsed report. */
+  const doctorWith = (rel, content) => {
+    const p = join(project, rel);
+    mkdirSync(join(p, ".."), { recursive: true });
+    writeFileSync(p, content);
+    const r = cli(["doctor", project, "--json"], t.dir);
+    rmSync(p);
+    return { status: r.status, report: JSON.parse(r.stdout) };
+  };
+  const failed = (report) => report.checks.filter((c) => !c.ok);
+  const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+  const ISSUE = "https://github.com/acme/app/issues/7";
+
+  it("--json reports every check and exits 0 on a clean project", () => {
+    const r = cli(["doctor", project, "--json"], t.dir);
+    expect(r.status).toBe(0);
+    const report = JSON.parse(r.stdout);
+    expect(report).toMatchObject({ engine: ENGINE_VERSION, ok: true, failed: 0 });
+    expect(report.passed).toBe(report.checks.length);
+    expect(report.checks.map((c) => c.name)).toContain("PR template carries the Definition of Done");
+  });
+
+  it.each([
+    ["commented-out test", 'import { it, expect } from "vitest";\nit("a", () => { expect(1).toBe(1); });\n  // it("b", () => { expect(2).toBe(2); });\n'],
+    ["import from __mocks__", 'import { it, expect } from "vitest";\nimport { f } from "../../src/core/__mocks__/example";\nit("a", () => { expect(f()).toBe(1); });\n'],
+    ["@ts-expect-error without a description", 'import { it, expect } from "vitest";\n// @ts-expect-error\nit("a", () => { expect(1).toBe(1); });\n'],
+    ["snapshot is the only assertion", 'import { it, expect } from "vitest";\nit("a", () => { expect({ a: 1 }).toMatchInlineSnapshot(); });\n'],
+  ])("fails on %s", (label, content) => {
+    const { status, report } = doctorWith("tests/unit/bad.test.ts", content);
+    expect(status).toBe(1);
+    expect(failed(report)).toStrictEqual([expect.objectContaining({ name: "no forbidden patterns in tests", hint: expect.stringContaining(label) })]);
+  });
+
+  it("allows a snapshot next to a real assertion, and a described @ts-expect-error", () => {
+    const { status } = doctorWith(
+      "tests/unit/ok.test.ts",
+      'import { it, expect } from "vitest";\nit("a", () => {\n  // @ts-expect-error: wrong arg type on purpose\n  expect(1).toBe(1);\n  expect({ a: 1 }).toMatchInlineSnapshot();\n});\n',
+    );
+    expect(status).toBe(0);
+  });
+
+  it("fails when the project config retries failing tests", () => {
+    const cfg = join(project, "vitest.config.mjs");
+    const before = readFileSync(cfg, "utf8");
+    writeFileSync(cfg, before.replace("test: {", "test: { retry: 2,"));
+    const r = cli(["doctor", project, "--json"], t.dir);
+    writeFileSync(cfg, before);
+    expect(r.status).toBe(1);
+    expect(failed(JSON.parse(r.stdout))).toStrictEqual([expect.objectContaining({ name: "vitest config does not retry failing tests", hint: expect.stringContaining("retry=2") })]);
+  });
+
+  it("accepts a labelled quarantine within 14 days", () => {
+    const { status } = doctorWith("tests/quarantine/flaky.test.ts", `// quarantined: ${daysAgo(13)} ${ISSUE}\n`);
+    expect(status).toBe(0);
+  });
+
+  it.each([
+    ["older than 14 days", `// quarantined: ${daysAgo(15)} ${ISSUE}\n`, "over 14 days"],
+    ["without an issue link", `// quarantined: ${daysAgo(1)}\n`, "needs"],
+    ["without a date", `// ${ISSUE}\n`, "needs"],
+  ])("fails a quarantined test %s", (_, content, hint) => {
+    const { status, report } = doctorWith("tests/quarantine/flaky.test.ts", content);
+    expect(status).toBe(1);
+    expect(failed(report)).toStrictEqual([expect.objectContaining({ name: expect.stringContaining("tests/quarantine/"), hint: expect.stringContaining(hint) })]);
+  });
+
+  it.each([
+    ["missing", null],
+    ["present without the Definition of Done", "## What and why\n"],
+  ])("fails when the PR template is %s", (_, replacement) => {
+    const p = join(project, ".github/pull_request_template.md");
+    const before = readFileSync(p, "utf8");
+    if (replacement === null) rmSync(p);
+    else writeFileSync(p, replacement);
+    const r = cli(["doctor", project, "--json"], t.dir);
+    writeFileSync(p, before);
+    expect(r.status).toBe(1);
+    expect(failed(JSON.parse(r.stdout)).map((c) => c.name)).toStrictEqual(["PR template carries the Definition of Done"]);
   });
 });

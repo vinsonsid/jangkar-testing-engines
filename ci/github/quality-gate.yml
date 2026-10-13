@@ -1,7 +1,7 @@
 # Reusable quality gate. Projects call it with a 10-line workflow:
 #   jobs:
 #     quality-gate:
-#       uses: vinsonsid/jangkar-testing-engines/.github/workflows/quality-gate.yml@v0.2.0
+#       uses: vinsonsid/jangkar-testing-engines/.github/workflows/quality-gate.yml@v0.3.0
 #       secrets: inherit
 #
 # Note: GitHub requires reusable workflows to live under .github/workflows in
@@ -100,9 +100,25 @@ jobs:
         run: |
           if [ -f coverage/coverage-summary.json ]; then
             node -e '
-              const s = require("./coverage/coverage-summary.json").total;
-              const row = k => `| ${k} | ${s[k].pct}% |`;
-              console.log("### Coverage (src/core + src/adapters)\n\n| Metric | % |\n|---|---|\n" + ["lines","branches","functions","statements"].map(row).join("\n"));
+              // Report src/core and src/adapters separately so a well-covered
+              // core cannot hide an untested adapter behind the total.
+              const summary = require("./coverage/coverage-summary.json");
+              const metrics = ["lines", "branches", "functions", "statements"];
+              const groups = { "src/core": {}, "src/adapters": {}, total: summary.total };
+              for (const [file, m] of Object.entries(summary)) {
+                const g = ["src/core", "src/adapters"].find((d) => file.includes(`/${d}/`));
+                if (!g) continue;
+                for (const k of metrics) {
+                  const acc = (groups[g][k] ??= { covered: 0, total: 0 });
+                  acc.covered += m[k].covered;
+                  acc.total += m[k].total;
+                }
+              }
+              const pct = (a) => (a && a.total ? `${((100 * a.covered) / a.total).toFixed(2)}%` : "n/a");
+              const cell = (g, k) => (g === "total" ? `${groups.total[k].pct}%` : pct(groups[g][k]));
+              const cols = Object.keys(groups);
+              console.log("### Coverage\n\n| Metric | " + cols.join(" | ") + " |\n|---|" + cols.map(() => "---|").join("") + "\n" +
+                metrics.map((k) => `| ${k} | ` + cols.map((g) => cell(g, k)).join(" | ") + " |").join("\n"));
             ' >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@v4

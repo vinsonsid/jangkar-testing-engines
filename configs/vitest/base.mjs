@@ -21,8 +21,11 @@ const base = {
     // A project with zero tests is a failing project, not a passing one.
     passWithNoTests: false,
     globals: false,
+    // A flaky test is a failing test. Move it to tests/quarantine/ with an issue
+    // link instead of retrying; doctor fails once it sits there over 14 days.
+    retry: 0,
     include: ["tests/**/*.test.{ts,tsx,js,mjs}", "src/**/*.test.{ts,tsx,js,mjs}"],
-    exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/e2e/**"],
+    exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/e2e/**", "**/tests/quarantine/**"],
     setupFiles: [setupFile],
     reporters: process.env.CI ? ["default", "junit"] : ["default"],
     outputFile: { junit: "reports/junit.xml" },
