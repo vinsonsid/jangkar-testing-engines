@@ -16,7 +16,7 @@ Stacks available in phase 1: `nextjs`, `node-api`. `python` and `mobile-expo` ar
 From the project root:
 
 ```bash
-npm install --save-dev github:vinsonsid/jangkar-testing-engines#v0.3.0
+npm install --save-dev github:vinsonsid/jangkar-testing-engines#v0.4.0
 npx jangkar-test retrofit
 npm install
 npm run test:all
@@ -39,7 +39,7 @@ Run `npx jangkar-test doctor` afterwards. It exits non-zero until the project me
 Projects pin the engine to a git tag. Upgrades are explicit:
 
 ```bash
-npx jangkar-test upgrade v0.3.0   # re-pin package.json and the CI caller
+npx jangkar-test upgrade v0.4.0   # re-pin package.json and the CI caller
 npm install                        # fetch that engine version
 npx jangkar-test upgrade           # refresh skills, agents, hooks, rules block from it
 npx jangkar-test doctor

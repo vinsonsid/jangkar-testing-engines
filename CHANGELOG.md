@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 — unreleased
+
+Phase 1 hardening, third slice: the skills and agent items. Adopters get it with `npx jangkar-test upgrade v0.4.0`; `doctor` requires the new skill.
+
+- **`/spec-first` boundary table.** Every money, date, percentage, count, or length input gets a row with below / at / above values and the rounding policy; each row becomes three `it()` cases.
+- **`test-auditor` fixed checklist.** Six rows in a fixed order (tautology, mocked-away logic, missing edge, assertion strength, layering violation, spec coverage), PASS/FAIL each, and the verdict derives from them. New checklist item 11 covers layering. `/test-review` reports the table first.
+- **New `/mutation-survivors`.** Reads `reports/mutation/report.json`, groups and ranks surviving mutants in `src/core`, proposes one exact-value test per group, and refuses threshold edits and unexplained `Stryker disable`.
+- Rules block step 4: run `/mutation-survivors` when a changed core file has survivors.
+
 ## 0.3.0 — 2026-10-13
 
 Phase 1 hardening, second slice. Adds gates; upgrading adopters pass them with `npx jangkar-test upgrade v0.3.0` (adds the PR template) and by fixing any test `doctor` now names.

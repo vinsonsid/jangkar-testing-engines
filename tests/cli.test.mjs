@@ -37,7 +37,9 @@ describe("jangkar-test init", () => {
     expect(readFileSync(join(project, "CLAUDE.md"), "utf8")).toContain("<!-- BEGIN:jangkar-testing-engines -->");
     const settings = JSON.parse(readFileSync(join(project, ".claude/settings.json"), "utf8"));
     expect(JSON.stringify(settings.hooks.Stop)).toContain("stop-check.sh");
-    expect(existsSync(join(project, ".claude/skills/spec-first/SKILL.md"))).toBe(true);
+    for (const s of ["spec-first", "test-review", "coverage-gaps", "system-test", "mutation-survivors"]) {
+      expect(existsSync(join(project, `.claude/skills/${s}/SKILL.md`))).toBe(true);
+    }
     expect(existsSync(join(project, ".claude/agents/test-auditor.md"))).toBe(true);
     const wf = readFileSync(join(project, ".github/workflows/quality-gate.yml"), "utf8");
     expect(wf).toContain(`quality-gate.yml@${ENGINE_VERSION}`);

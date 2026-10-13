@@ -25,7 +25,7 @@ The session that wrote the implementation cannot audit its own tests honestly. I
 
 4. **Verify each finding yourself.** For every finding rated `high`, actually try it: revert or mutate the implementation line the auditor named, run the test, and confirm whether it still passes. A finding that survives this check is `CONFIRMED`. One that does not is dropped.
 
-5. **Report** as a table:
+5. **Report.** First the auditor's six-row checklist table unchanged (Tautology, Mocked-away logic, Missing edge, Assertion strength, Layering violation, Spec coverage), so runs can be compared. Then the findings:
 
    | Severity | File | Finding | Verified |
    |---|---|---|---|
