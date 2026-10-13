@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 — unreleased
+## 0.3.0 — 2026-10-13
 
 Phase 1 hardening, second slice. Adds gates; upgrading adopters pass them with `npx jangkar-test upgrade v0.3.0` (adds the PR template) and by fixing any test `doctor` now names.
 
