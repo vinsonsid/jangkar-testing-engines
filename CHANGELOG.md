@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — unreleased
+
+Phase 1 hardening, last slice. Upgrade with `npx jangkar-test upgrade v0.5.0`; it also adds the nightly trigger to your caller workflow.
+
+- **Time budgets.** `quality-gate` runs unit tests and integration + system tests under `jangkar-test timed` and reports wall time against a budget (60 s and 300 s, inputs `unit-budget-seconds` and `integration-budget-seconds`) in the step summary. A breach is a warning; `enforce-budgets: true` makes it a failure. The default flips in the next major.
+- **Scoped mutation on PRs.** PRs mutate only the `src/core` files they change (`jangkar-test mutation-scope`, which skips tests, `types.ts`, `index.ts`, declarations, and deletions). Nightly (`schedule`), manual (`workflow_dispatch`), and `run-mutation: true` runs mutate all of `src/core`.
+- **Mutation summary and trend.** Every mutation run writes its score and up to 20 survivors to the step summary (`jangkar-test mutation-summary`). Full runs append to a trend file kept in the Actions cache (last 30 runs) and print the change against the previous run.
+- **Caller template** gains a nightly `schedule` (02:17 WIB) and `workflow_dispatch`, and a per-event concurrency group so a push cannot cancel the nightly run. `upgrade` adds both triggers to an existing caller once.
+- **`docs/decisions/`** with backfilled decisions and the phase 0 exit note: the first real defect the gate caught (yespajak margin impas, 0007).
+
 ## 0.4.0 — 2026-11-20
 
 Phase 1 hardening, third slice: the skills and agent items. Adopters get it with `npx jangkar-test upgrade v0.4.0`; `doctor` requires the new skill.

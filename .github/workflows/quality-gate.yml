@@ -1,7 +1,7 @@
 # Reusable quality gate. Projects call it with a 10-line workflow:
 #   jobs:
 #     quality-gate:
-#       uses: vinsonsid/jangkar-testing-engines/.github/workflows/quality-gate.yml@v0.4.0
+#       uses: vinsonsid/jangkar-testing-engines/.github/workflows/quality-gate.yml@v0.5.0
 #       secrets: inherit
 #
 # Note: GitHub requires reusable workflows to live under .github/workflows in
@@ -27,6 +27,18 @@ on:
       working-directory:
         type: string
         default: "."
+      unit-budget-seconds:
+        description: Wall-time budget for test:unit.
+        type: number
+        default: 60
+      integration-budget-seconds:
+        description: Wall-time budget for test:integration plus test:system.
+        type: number
+        default: 300
+      enforce-budgets:
+        description: Fail the job when a time budget is exceeded. Off means a warning in the run.
+        type: boolean
+        default: false
 
 env:
   CI: "true"
@@ -94,7 +106,10 @@ jobs:
           node-version: ${{ inputs.node-version }}
           cache: npm
       - run: npm ci
-      - run: npm run test:unit
+      - name: Unit tests (time budget)
+        env:
+          JANGKAR_ENFORCE_BUDGETS: ${{ inputs.enforce-budgets && '1' || '0' }}
+        run: npx jangkar-test timed unit ${{ inputs.unit-budget-seconds }} -- npm run test:unit
       - name: Coverage summary
         if: always()
         run: |
@@ -152,8 +167,10 @@ jobs:
       - name: Start Supabase
         if: steps.sb.outputs.present == 'true'
         run: supabase start
-      - run: npm run test:integration
-      - run: npm run test:system
+      - name: Integration + system tests (time budget)
+        env:
+          JANGKAR_ENFORCE_BUDGETS: ${{ inputs.enforce-budgets && '1' || '0' }}
+        run: npx jangkar-test timed integration+system ${{ inputs.integration-budget-seconds }} -- sh -c "npm run test:integration && npm run test:system"
 
   mutation:
     name: mutation (src/core)
@@ -166,30 +183,56 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Should run?
-        id: gate
-        run: |
-          if [ "${{ inputs.run-mutation }}" = "true" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base="${{ github.event.pull_request.base.sha }}"
-            if git diff --name-only "$base"...HEAD | grep -q '^src/core/'; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          fi
-          echo "run=false" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.run == 'true'
         with:
           node-version: ${{ inputs.node-version }}
           cache: npm
+      - run: npm ci
+      - name: Scope
+        id: gate
+        # PRs mutate only the src/core files they change. Nightly, manual, and
+        # run-mutation runs mutate all of src/core and record the trend.
+        run: |
+          if [ "${{ inputs.run-mutation }}" = "true" ] || [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "full=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files="$(npx jangkar-test mutation-scope "${{ github.event.pull_request.base.sha }}")"
+            if [ -n "$files" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"; echo "files=$files" >> "$GITHUB_OUTPUT"
+              echo "Mutating changed core files: $files"; exit 0
+            fi
+          fi
+          echo "run=false" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         if: steps.gate.outputs.run == 'true'
         with:
           path: ${{ inputs.working-directory }}/reports/stryker-incremental.json
           key: stryker-${{ github.ref }}-${{ github.sha }}
           restore-keys: stryker-${{ github.ref }}-
-      - run: npm ci
-        if: steps.gate.outputs.run == 'true'
-      - run: npm run test:mutation
-        if: steps.gate.outputs.run == 'true'
+      - uses: actions/cache/restore@v4
+        if: steps.gate.outputs.full == 'true'
+        with:
+          path: ${{ inputs.working-directory }}/reports/mutation-trend.json
+          key: mutation-trend-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: mutation-trend-${{ github.ref }}-
+      - name: Mutation (full src/core)
+        if: steps.gate.outputs.full == 'true'
+        run: npm run test:mutation
+      - name: Mutation (changed src/core files)
+        if: steps.gate.outputs.run == 'true' && steps.gate.outputs.full != 'true'
+        run: npm run test:mutation -- --mutate "${{ steps.gate.outputs.files }}"
+      - name: Mutation summary
+        if: always() && steps.gate.outputs.run == 'true'
+        run: |
+          if [ -f reports/mutation/report.json ]; then
+            npx jangkar-test mutation-summary reports/mutation/report.json ${{ steps.gate.outputs.full == 'true' && '--trend reports/mutation-trend.json' || '' }} >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/cache/save@v4
+        if: always() && steps.gate.outputs.full == 'true'
+        with:
+          path: ${{ inputs.working-directory }}/reports/mutation-trend.json
+          key: mutation-trend-${{ github.ref }}-${{ github.run_id }}
       - uses: actions/upload-artifact@v4
         if: always() && steps.gate.outputs.run == 'true'
         with:

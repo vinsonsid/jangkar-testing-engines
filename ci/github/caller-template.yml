@@ -2,12 +2,15 @@
 name: quality-gate
 
 on:
+  schedule:
+    - cron: "17 19 * * *" # nightly full mutation run
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
 
 concurrency:
-  group: quality-gate-${{ github.ref }}
+  group: quality-gate-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:

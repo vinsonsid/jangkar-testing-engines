@@ -11,7 +11,7 @@ export default defineConfig({
   srcExclude: [
     "node_modules/**", "examples/**", "templates/**", "claude/**", "configs/**", "ci/**", "tests/**", "bin/**", ".github/**", ".vitepress/**",
   ],
-  rewrites: { "README.md": "index.md", "docs/:page": ":page" },
+  rewrites: { "README.md": "index.md", "docs/:page": ":page", "docs/decisions/:page": "decisions/:page" },
   cleanUrls: true,
   lastUpdated: true,
   ignoreDeadLinks: true,
@@ -35,6 +35,7 @@ export default defineConfig({
         text: "Plan",
         items: [
           { text: "Roadmap", link: "/roadmap" },
+          { text: "Decisions", link: "/decisions/" },
           { text: "Changelog", link: "/CHANGELOG" },
         ],
       },
