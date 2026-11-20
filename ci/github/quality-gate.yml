@@ -1,7 +1,7 @@
 # Reusable quality gate. Projects call it with a 10-line workflow:
 #   jobs:
 #     quality-gate:
-#       uses: vinsonsid/jangkar-testing-engines/.github/workflows/quality-gate.yml@v0.5.0
+#       uses: vinsonsid/jangkar-testing-engines/.github/workflows/quality-gate.yml@v0.6.0
 #       secrets: inherit
 #
 # Note: GitHub requires reusable workflows to live under .github/workflows in
@@ -222,11 +222,13 @@ jobs:
       - name: Mutation (changed src/core files)
         if: steps.gate.outputs.run == 'true' && steps.gate.outputs.full != 'true'
         run: npm run test:mutation -- --mutate "${{ steps.gate.outputs.files }}"
-      - name: Mutation summary
+      - name: Mutation summary (PRs fail on a survivor in changed lines)
         if: always() && steps.gate.outputs.run == 'true'
+        shell: bash
         run: |
+          set -o pipefail
           if [ -f reports/mutation/report.json ]; then
-            npx jangkar-test mutation-summary reports/mutation/report.json ${{ steps.gate.outputs.full == 'true' && '--trend reports/mutation-trend.json' || '' }} >> "$GITHUB_STEP_SUMMARY"
+            npx jangkar-test mutation-summary reports/mutation/report.json ${{ steps.gate.outputs.full == 'true' && '--trend reports/mutation-trend.json' || format('--changed-since {0}', github.event.pull_request.base.sha) }} | tee -a "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/cache/save@v4
         if: always() && steps.gate.outputs.full == 'true'
