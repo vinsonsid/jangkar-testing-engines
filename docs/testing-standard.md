@@ -71,11 +71,12 @@ Supabase, Postgres, Redis, and the filesystem are never mocked. Use the local in
 
 For every feature or bug fix:
 
-1. Run `/spec-first`. It produces `specs/<feature>.md` with Given/When/Then acceptance criteria and failing test files. It will not write implementation.
+1. Run `/spec-first`. It produces `specs/<feature>.md` with Given/When/Then acceptance criteria, a boundary table (below / at / above every threshold, with the rounding policy) for money, date, and tax inputs, and failing test files. It will not write implementation.
 2. Implement until the tests pass.
-3. Run `/test-review`. A fresh-context auditor reads the diff and reports tautologies, mocked-away logic, and missing edge cases. Fix findings.
-4. Run `npm run test:all`. Paste the output in the PR.
-5. Open the PR. CI is the final word.
+3. Run `/test-review`. A fresh-context auditor reads the diff and returns a fixed six-item checklist (tautology, mocked-away logic, missing edge, assertion strength, layering violation, spec coverage) plus findings. Fix findings.
+4. Run `npm run test:mutation` when `src/core` changed. For every surviving mutant, run `/mutation-survivors` and add the test it proposes.
+5. Run `npm run test:all`. Paste the output in the PR.
+6. Open the PR. CI is the final word.
 
 ## 8. Definition of Done (paste into every PR)
 

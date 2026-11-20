@@ -369,7 +369,7 @@ function cmdDoctor({ positional, flags }) {
   add(existsSync(join(dir, ".claude/hooks/stop-check.sh")), ".claude/hooks/stop-check.sh installed");
   const settingsPath = join(dir, ".claude/settings.json");
   add(existsSync(settingsPath) && JSON.stringify(readJson(settingsPath).hooks?.Stop ?? []).includes("stop-check.sh"), "Stop hook wired in .claude/settings.json");
-  for (const s of ["spec-first", "test-review", "coverage-gaps", "system-test"]) add(existsSync(join(dir, `.claude/skills/${s}/SKILL.md`)), `skill /${s} installed`);
+  for (const s of ["spec-first", "test-review", "coverage-gaps", "system-test", "mutation-survivors"]) add(existsSync(join(dir, `.claude/skills/${s}/SKILL.md`)), `skill /${s} installed`);
   add(existsSync(join(dir, ".claude/agents/test-auditor.md")), "test-auditor agent installed");
   const drift = claudeToolingDrift(dir);
   add(drift.length === 0, `Claude tooling matches engine ${ENGINE_VERSION}`, drift.length ? `stale: ${drift.join(", ")}. Run: npx jangkar-test upgrade` : "");

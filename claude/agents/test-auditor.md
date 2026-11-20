@@ -21,12 +21,24 @@ You have been given a diff, optionally coverage numbers, and optionally spec fil
 8. **Conditional logic inside tests.** `if` or `try` around an `expect`: `high`.
 9. **Shared mutable state** between tests that would make order matter: `medium`.
 10. **Title honesty.** Does the title claim more than the assertion proves? `low`.
+11. **Layering.** Does any test import `src/core` through an adapter, or exercise `core` only via I/O so that a `core` defect would be masked by the adapter? Does the implementation under test import I/O, a framework, or an SDK into `src/core`? `high`.
 
 ## Output format
 
-Return only this, no preamble:
+Return only this, no preamble. The checklist table has exactly these six rows in this order, every run, so reports are comparable across runs. A row is `FAIL` when at least one finding of that kind exists at any severity, `PASS` when none does, `N/A` only for a diff with no tests of that kind, with a reason in the Evidence column.
 
 ```
+## Checklist
+
+| Item | Result | Evidence |
+|---|---|---|
+| Tautology | PASS / FAIL | finding numbers, or "every test fails against a constant return" |
+| Mocked-away logic | PASS / FAIL | finding numbers, or what the real dependency was |
+| Missing edge | PASS / FAIL | spec boundary rows and error paths without a test |
+| Assertion strength | PASS / FAIL | finding numbers, or the weakest assertion seen |
+| Layering violation | PASS / FAIL | import path, or "core reached only through core" |
+| Spec coverage | PASS / FAIL | ACs with no test, or "AC1–AC6 each have one" |
+
 ## Findings
 
 | # | Severity | File:line | Finding | How to verify |
@@ -43,6 +55,6 @@ Return only this, no preamble:
 <one of: TRUSTWORTHY | NEEDS WORK | FAKE GREEN> — one sentence why.
 ```
 
-If you find nothing at `high` and the spec is fully covered, say `TRUSTWORTHY` and list the two weakest tests anyway.
+The verdict follows the checklist: any `FAIL` on Tautology, Mocked-away logic, or Layering violation is `FAKE GREEN`; any other `FAIL` is `NEEDS WORK`; all `PASS` is `TRUSTWORTHY`. If you find nothing at `high` and the spec is fully covered, say `TRUSTWORTHY` and list the two weakest tests anyway.
 
 Do not modify any file.

@@ -8,8 +8,9 @@ This project uses `@jangkar/testing-engines`. The full standard is in `node_modu
 1. **Spec first.** Run `/spec-first <feature>` before writing implementation. It writes `specs/<feature>.md` and failing tests. Do not write implementation in the same turn as the spec.
 2. **Implement** in `src/core` (pure logic) and `src/adapters` (I/O). Routes and components in `app/` are glue only.
 3. **Review the tests.** Run `/test-review`. Resolve every finding rated `high` before continuing.
-4. **Prove it.** Run `npm run test:all` and paste the full output in your final message. Never summarize test results from memory. If a test fails, say so and show the failure.
-5. **Definition of Done.** Paste the DoD checklist from the standard into the PR description with every box checked honestly.
+4. **Kill the survivors.** If `npm run test:mutation` reports a score below threshold or any surviving mutant in a file you changed, run `/mutation-survivors` and add the tests it proposes. Coverage gaps: `/coverage-gaps`.
+5. **Prove it.** Run `npm run test:all` and paste the full output in your final message. Never summarize test results from memory. If a test fails, say so and show the failure.
+6. **Definition of Done.** Paste the DoD checklist from the standard into the PR description with every box checked honestly.
 
 ## Layering
 
