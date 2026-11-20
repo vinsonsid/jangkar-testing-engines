@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// jangkar-test: init | retrofit | doctor | upgrade
+// jangkar-test: init | retrofit | doctor | upgrade | timed | mutation-scope | mutation-summary
 // Plain Node, no dependencies, so it runs via `npx github:...` before install.
 
+import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +16,8 @@ const MARK_END = "<!-- END:jangkar-testing-engines -->";
 const STACKS = ["nextjs", "node-api"];
 const PHASE_LATER = { python: "phase 1b", "mobile-expo": "phase 2" };
 const QUARANTINE_DAYS = 14;
+const NIGHTLY_CRON = "17 19 * * *"; // 02:17 WIB
+const TREND_KEEP = 30;
 
 const log = (...a) => console.log(...a);
 const fail = (msg) => {
@@ -410,7 +413,18 @@ function cmdUpgrade({ positional }) {
     log(`Pinned engine to ${tag} in package.json${existsSync(wf) ? " and .github/workflows/quality-gate.yml" : ""}.`);
   }
 
-  // 2. Refresh the files the engine owns, from the engine that is running now.
+  // 2. The caller gains the nightly full mutation run once; existing triggers are kept.
+  const caller = join(dir, ".github/workflows/quality-gate.yml");
+  if (existsSync(caller)) {
+    const before = readFileSync(caller, "utf8");
+    const after = withNightlyTriggers(before);
+    if (after !== before) {
+      writeFileSync(caller, after);
+      log("  ~ .github/workflows/quality-gate.yml (added nightly schedule and workflow_dispatch)");
+    }
+  }
+
+  // 3. Refresh the files the engine owns, from the engine that is running now.
   const { written, updated, unchanged } = installClaudeTooling(dir);
   // Files a new release adds to the scaffold arrive once; an existing copy is the project's.
   const prTemplate = ".github/pull_request_template.md";
@@ -428,6 +442,89 @@ function cmdUpgrade({ positional }) {
   log("\nNext:\n  npx jangkar-test doctor\n  git diff .claude CLAUDE.md   # review what changed");
 }
 
+/** Add `schedule` and `workflow_dispatch` under `on:` when missing. Returns the new text. */
+function withNightlyTriggers(text) {
+  const add = [];
+  if (!/^\s+schedule:/m.test(text)) add.push(`  schedule:\n    - cron: "${NIGHTLY_CRON}" # nightly full mutation run`);
+  if (!/^\s+workflow_dispatch:/m.test(text)) add.push("  workflow_dispatch:");
+  if (!add.length || !/^on:\s*$/m.test(text)) return text;
+  return text.replace(/^on:\s*$/m, `on:\n${add.join("\n")}`);
+}
+
+/**
+ * Run a command, report its wall time against a budget, keep its exit code.
+ * Over budget is a GitHub warning, or an error and exit 1 with JANGKAR_ENFORCE_BUDGETS=1.
+ */
+function cmdTimed(argv) {
+  const sep = argv.indexOf("--");
+  const [label, budgetRaw] = sep === -1 ? [] : argv.slice(0, sep);
+  const command = sep === -1 ? [] : argv.slice(sep + 1);
+  const budget = Number(budgetRaw);
+  if (!label || !(budget > 0) || command.length === 0) fail("usage: jangkar-test timed <label> <budget-seconds> -- <command...>");
+  const start = process.hrtime.bigint();
+  const r = spawnSync(command[0], command.slice(1), { stdio: "inherit" });
+  const seconds = Number(process.hrtime.bigint() - start) / 1e9;
+  if (r.error) fail(`${label}: ${r.error.message}`);
+  const over = seconds > budget;
+  const enforce = process.env.JANGKAR_ENFORCE_BUDGETS === "1";
+  const line = `${label}: ${seconds.toFixed(1)} s of ${budget} s budget`;
+  log(over ? `::${enforce ? "error" : "warning"} title=Time budget::${line} (over budget)` : line);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    writeFileSync(process.env.GITHUB_STEP_SUMMARY, `| ${label} | ${seconds.toFixed(1)} s | ${budget} s | ${over ? (enforce ? "over, failing" : "over, warning") : "within"} |\n`, { flag: "a" });
+  }
+  const status = r.status ?? 1;
+  process.exit(status === 0 && over && enforce ? 1 : status);
+}
+
+/** Changed src/core sources since <base>, comma-separated, for `stryker run --mutate`. */
+function cmdMutationScope({ positional }) {
+  const base = positional[0];
+  if (!base) fail("usage: jangkar-test mutation-scope <base-ref>");
+  const r = spawnSync("git", ["diff", "--name-only", "--relative", "--diff-filter=d", `${base}...HEAD`, "--", "src/core"], { encoding: "utf8" });
+  if (r.status !== 0) fail(`git diff failed: ${r.stderr.trim()}`);
+  const files = r.stdout
+    .split("\n")
+    .filter((f) => /\.tsx?$/.test(f) && !/(\.test\.tsx?|\.d\.ts|(^|\/)(types|index)\.ts)$/.test(f));
+  log(files.join(","));
+}
+
+/** Markdown summary of a Stryker JSON report; with --trend <file>, append the score and print the trend. */
+function cmdMutationSummary({ positional, flags }) {
+  const reportPath = resolve(positional[0] ?? "reports/mutation/report.json");
+  if (!existsSync(reportPath)) fail(`no mutation report at ${reportPath}`);
+  const report = readJson(reportPath);
+  const detected = ["Killed", "Timeout"];
+  const undetected = ["Survived", "NoCoverage"];
+  const survivors = [];
+  let killed = 0;
+  for (const [file, { mutants }] of Object.entries(report.files)) {
+    for (const m of mutants) {
+      if (detected.includes(m.status)) killed++;
+      else if (undetected.includes(m.status)) survivors.push({ file: relative(process.cwd(), resolve(file)), line: m.location.start.line, status: m.status, mutator: m.mutatorName, replacement: m.replacement ?? "" });
+    }
+  }
+  const total = killed + survivors.length;
+  const score = total ? Math.round((10_000 * killed) / total) / 100 : null;
+  const out = [`### Mutation score: ${score === null ? "n/a (no mutants)" : `${score}%`} (${killed} of ${total} detected)`, ""];
+  if (survivors.length) {
+    out.push("| File:line | Status | Mutator | Replacement |", "|---|---|---|---|");
+    for (const s of survivors.slice(0, 20)) out.push(`| ${s.file}:${s.line} | ${s.status} | ${s.mutator} | \`${s.replacement.replaceAll("|", "\\|").replaceAll("\n", " ").slice(0, 60)}\` |`);
+    if (survivors.length > 20) out.push(`| … ${survivors.length - 20} more | | | |`);
+    out.push("", "Run `/mutation-survivors` to turn these into tests.");
+  }
+  if (typeof flags.trend === "string" && score !== null) {
+    const trendPath = resolve(flags.trend);
+    const trend = existsSync(trendPath) ? readJson(trendPath) : [];
+    trend.push({ date: new Date().toISOString().slice(0, 10), sha: (process.env.GITHUB_SHA ?? "").slice(0, 7), score });
+    const kept = trend.slice(-TREND_KEEP);
+    mkdirSync(dirname(trendPath), { recursive: true });
+    writeJson(trendPath, kept);
+    const prev = kept.length > 1 ? kept[kept.length - 2].score : null;
+    out.push("", `Trend (last ${Math.min(kept.length, 10)} full runs): ${kept.slice(-10).map((t) => t.score).join(" → ")}${prev === null ? "" : ` (${score >= prev ? "+" : ""}${(score - prev).toFixed(2)} vs previous)`}`);
+  }
+  log(out.join("\n"));
+}
+
 function usage() {
   log(`jangkar-test ${ENGINE_VERSION}
 
@@ -435,12 +532,17 @@ function usage() {
   retrofit [dir] [--stack s] [--force]     add the engine to an existing project
   doctor [dir] [--quiet|--json]            check a project against the standard (exit 1 on failure)
   upgrade [vX.Y.Z]                         re-pin (optional) and refresh skills, hooks, and rules from the engine
+  timed <label> <seconds> -- <cmd...>      run cmd, warn (or fail with JANGKAR_ENFORCE_BUDGETS=1) when over budget
+  mutation-scope <base-ref>                changed src/core sources since base, comma-separated, for stryker --mutate
+  mutation-summary [report] [--trend f]    markdown score and survivors from a Stryker JSON report; append to a trend file
 `);
 }
 
+// `timed` passes everything after `--` through untouched, so it bypasses parseArgs.
+if (process.argv[2] === "timed") cmdTimed(process.argv.slice(3));
 const { flags, positional } = parseArgs(process.argv.slice(2));
 const cmd = positional.shift();
-const commands = { init: cmdInit, retrofit: cmdRetrofit, doctor: cmdDoctor, upgrade: cmdUpgrade };
+const commands = { init: cmdInit, retrofit: cmdRetrofit, doctor: cmdDoctor, upgrade: cmdUpgrade, "mutation-scope": cmdMutationScope, "mutation-summary": cmdMutationSummary };
 if (!cmd || flags.help || !(cmd in commands)) {
   usage();
   process.exit(cmd && !(cmd in commands) ? 1 : 0);
