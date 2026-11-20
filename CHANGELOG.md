@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 — unreleased
+## 0.4.0 — 2026-11-20
 
 Phase 1 hardening, third slice: the skills and agent items. Adopters get it with `npx jangkar-test upgrade v0.4.0`; `doctor` requires the new skill.
 
