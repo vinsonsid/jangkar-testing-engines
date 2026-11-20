@@ -215,6 +215,35 @@ describe("jangkar-test doctor: section 5 checks, quarantine, PR template, --json
   const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
   const ISSUE = "https://github.com/acme/app/issues/7";
 
+  describe("every spec AC is named in a test of the code it covers", () => {
+    const spec = "specs/rounding.md";
+    const otherTest = "tests/unit/other.test.ts";
+    const run = (specText, extra = {}) => {
+      const files = { [spec]: specText, ...extra };
+      for (const [rel, text] of Object.entries(files)) writeFileSync(join(project, rel), text);
+      const r = cli(["doctor", project, "--json"], t.dir);
+      for (const rel of Object.keys(files)) rmSync(join(project, rel));
+      return { status: r.status, report: JSON.parse(r.stdout) };
+    };
+    const acSpec = "# Rounding\n\nCore: `src/core/example.ts`\n\n### AC91: a\n### AC92: b\n";
+
+    it("passes when a test importing the module names each AC", () => {
+      const r = run(acSpec, { [otherTest]: 'import { it, expect } from "vitest";\nimport { add } from "../../src/core/example";\nit("AC91 and AC92", () => { expect(add(1, 1)).toBe(2); });\n' });
+      expect(r.status).toBe(0);
+    });
+
+    it("fails, naming the spec and AC, when no test of that module names it", () => {
+      const r = run(acSpec, { [otherTest]: 'import { it, expect } from "vitest";\nimport { add } from "../../src/core/example";\nit("AC91", () => { expect(add(1, 1)).toBe(2); });\n' });
+      expect(r.status).toBe(1);
+      expect(failed(r.report)).toStrictEqual([expect.objectContaining({ name: "every spec AC is named in a test", hint: "specs/rounding.md AC92" })]);
+    });
+
+    it("does not count an AC named only in a test of a different module", () => {
+      const r = run(acSpec, { [otherTest]: 'import { it, expect } from "vitest";\nit("AC91 AC92 elsewhere", () => { expect(1).toBe(1); });\n' });
+      expect(failed(r.report)).toStrictEqual([expect.objectContaining({ name: "every spec AC is named in a test", hint: "specs/rounding.md AC91; specs/rounding.md AC92" })]);
+    });
+  });
+
   it("--json reports every check and exits 0 on a clean project", () => {
     const r = cli(["doctor", project, "--json"], t.dir);
     expect(r.status).toBe(0);
@@ -415,6 +444,43 @@ describe("jangkar-test mutation-summary", () => {
 
   it("fails without a report", () => {
     expect(cli(["mutation-summary", "missing.json"], t.dir).status).toBe(1);
+  });
+});
+
+describe("jangkar-test mutation-summary --changed-since", () => {
+  let t;
+  const mutant = (status, line) => ({ status, mutatorName: "ArithmeticOperator", replacement: "a / 2", location: { start: { line, column: 1 }, end: { line, column: 9 } } });
+  const report = (mutants) => writeFileSync(join(t.dir, "report.json"), JSON.stringify({ files: { "src/core/a.ts": { mutants } } }));
+  beforeAll(() => {
+    t = tmp();
+    git(["init", "-q", "-b", "main"], t.dir);
+    mkdirSync(join(t.dir, "src/core"), { recursive: true });
+    writeFileSync(join(t.dir, "src/core/a.ts"), "l1\nl2\nl3\nl4\nl5\n");
+    git(["add", "."], t.dir);
+    git(["commit", "-q", "-m", "base"], t.dir);
+    git(["tag", "base"], t.dir);
+    writeFileSync(join(t.dir, "src/core/a.ts"), "l1\nCHANGED\nl3\nl4\nl5\n");
+    git(["commit", "-qam", "change"], t.dir);
+  });
+  afterAll(() => t.cleanup());
+
+  it("fails when a mutant survives on a changed line, naming it", () => {
+    report([mutant("Killed", 2), mutant("Survived", 2), mutant("Survived", 5)]);
+    const r = cli(["mutation-summary", "report.json", "--changed-since", "base"], t.dir);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("**1 mutant(s) survive on lines this branch changed.** No test pins them: src/core/a.ts:2 (ArithmeticOperator).");
+  });
+
+  it("treats an uncovered mutant on a changed line the same as a survivor", () => {
+    report([mutant("NoCoverage", 2)]);
+    expect(cli(["mutation-summary", "report.json", "--changed-since", "base"], t.dir).status).toBe(1);
+  });
+
+  it("passes when survivors are only on unchanged lines or waived", () => {
+    report([mutant("Killed", 2), mutant("Ignored", 2), mutant("Survived", 5)]);
+    const r = cli(["mutation-summary", "report.json", "--changed-since", "base"], t.dir);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("No surviving mutant on lines this branch changed.");
   });
 });
 

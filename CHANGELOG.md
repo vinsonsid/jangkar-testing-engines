@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.5.0 — unreleased
+## 0.6.0 — 2026-11-20
+
+Closes the gap the phase 1 bad-PR test found (decision 0008). Upgrade with `npx jangkar-test upgrade v0.6.0`.
+
+- **Changed-line survivors fail PRs.** On a PR, `mutation-summary --changed-since <base>` exits 1 when a mutant survives, or is uncovered, on a `src/core` line the branch added or changed. A proven equivalent mutant is waived in source with `// Stryker disable next-line <Mutator>: <reason>`, which shows up in review. The global break threshold (70) still applies to everything else.
+- **`doctor`: every spec AC is named in a test of the code it covers.** For each `specs/*.md`, every `### ACn` heading must appear in a test file that imports one of the `src/core` modules the spec names. Labels in tests of other modules do not count. Specs that name no module are checked against all tests.
+
+## 0.5.0 — 2026-11-20
 
 Phase 1 hardening, last slice. Upgrade with `npx jangkar-test upgrade v0.5.0`; it also adds the nightly trigger to your caller workflow.
 

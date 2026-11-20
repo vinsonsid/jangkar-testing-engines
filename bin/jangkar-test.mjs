@@ -335,6 +335,24 @@ function cmdDoctor({ positional, flags }) {
   }
   add(forbidden.length === 0, "no forbidden patterns in tests", forbidden.join("; "));
 
+  // Every acceptance criterion in a spec is named in a test of the code that spec covers:
+  // a test file that imports one of the src/core modules the spec names.
+  const specDir = join(dir, "specs");
+  const specs = existsSync(specDir) ? readdirSync(specDir).filter((f) => f.endsWith(".md") && f !== "README.md") : [];
+  const testTexts = all.map((f) => readFileSync(join(dir, f), "utf8"));
+  const escape = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const unnamed = [];
+  for (const spec of specs) {
+    const text = readFileSync(join(specDir, spec), "utf8");
+    const modules = [...new Set([...text.matchAll(/src\/(core\/[\w/-]+)\.(?:ts|tsx|js|mjs)\b/g)].map((m) => m[1]))];
+    const imports = modules.map((m) => new RegExp(`["'][^"']*\\b${escape(m)}(\\.m?[jt]sx?)?["']`));
+    const relevant = modules.length ? testTexts.filter((t) => imports.some((re) => re.test(t))).join("\n") : testTexts.join("\n");
+    for (const [, ac] of text.matchAll(/^#{2,4}\s+(AC\d+)\b/gm)) {
+      if (!new RegExp(`\\b${ac}\\b`).test(relevant)) unnamed.push(`specs/${spec} ${ac}`);
+    }
+  }
+  add(unnamed.length === 0, "every spec AC is named in a test", unnamed.join("; "));
+
   // Threshold tampering: any explicit threshold below the engine floor in the project's config.
   const vitestCfg = existsSync(join(dir, "vitest.config.mjs")) ? readFileSync(join(dir, "vitest.config.mjs"), "utf8") : "";
   const low = [...vitestCfg.matchAll(/\b(lines|branches|functions|statements)\s*:\s*(\d+)/g)].filter((m) => Number(m[2]) < 80).map((m) => `${m[1]}=${m[2]}`);
@@ -488,7 +506,27 @@ function cmdMutationScope({ positional }) {
   log(files.join(","));
 }
 
-/** Markdown summary of a Stryker JSON report; with --trend <file>, append the score and print the trend. */
+/** Lines added or changed since <base>, per file: { "src/core/a.ts": Set<number> }. */
+function changedLines(base) {
+  const r = spawnSync("git", ["diff", "-U0", "--relative", `${base}...HEAD`, "--", "src/core"], { encoding: "utf8" });
+  if (r.status !== 0) fail(`git diff failed: ${r.stderr.trim()}`);
+  const out = {};
+  let file = null;
+  for (const line of r.stdout.split("\n")) {
+    const f = line.match(/^\+\+\+ b\/(.+)$/);
+    if (f) { file = f[1]; out[file] ??= new Set(); continue; }
+    const h = line.match(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/);
+    if (h && file) for (let i = 0, n = Number(h[2] ?? 1); i < n; i++) out[file].add(Number(h[1]) + i);
+  }
+  return out;
+}
+
+/**
+ * Markdown summary of a Stryker JSON report; with --trend <file>, append the score and print the trend.
+ * With --changed-since <base>, exit 1 when a mutant survives on a line the branch added or changed:
+ * no test pins that line. An equivalent mutant is waived in the source with
+ * `// Stryker disable next-line <Mutator>: <reason>`, which is visible in review.
+ */
 function cmdMutationSummary({ positional, flags }) {
   const reportPath = resolve(positional[0] ?? "reports/mutation/report.json");
   if (!existsSync(reportPath)) fail(`no mutation report at ${reportPath}`);
@@ -500,7 +538,7 @@ function cmdMutationSummary({ positional, flags }) {
   for (const [file, { mutants }] of Object.entries(report.files)) {
     for (const m of mutants) {
       if (detected.includes(m.status)) killed++;
-      else if (undetected.includes(m.status)) survivors.push({ file: relative(process.cwd(), resolve(file)), line: m.location.start.line, status: m.status, mutator: m.mutatorName, replacement: m.replacement ?? "" });
+      else if (undetected.includes(m.status)) survivors.push({ file: relative(process.cwd(), resolve(file)), line: m.location.start.line, endLine: m.location.end.line, status: m.status, mutator: m.mutatorName, replacement: m.replacement ?? "" });
     }
   }
   const total = killed + survivors.length;
@@ -522,7 +560,21 @@ function cmdMutationSummary({ positional, flags }) {
     const prev = kept.length > 1 ? kept[kept.length - 2].score : null;
     out.push("", `Trend (last ${Math.min(kept.length, 10)} full runs): ${kept.slice(-10).map((t) => t.score).join(" → ")}${prev === null ? "" : ` (${score >= prev ? "+" : ""}${(score - prev).toFixed(2)} vs previous)`}`);
   }
+  let onChanged = [];
+  if (typeof flags["changed-since"] === "string") {
+    const changed = changedLines(flags["changed-since"]);
+    onChanged = survivors.filter((s) => {
+      const lines = changed[s.file];
+      if (!lines) return false;
+      for (let l = s.line; l <= s.endLine; l++) if (lines.has(l)) return true;
+      return false;
+    });
+    out.push("", onChanged.length
+      ? `**${onChanged.length} mutant(s) survive on lines this branch changed.** No test pins them: ${onChanged.map((s) => `${s.file}:${s.line} (${s.mutator})`).join(", ")}. Add a test that fails on the mutant, or waive a proven equivalent with \`// Stryker disable next-line <Mutator>: <reason>\`.`
+      : "No surviving mutant on lines this branch changed.");
+  }
   log(out.join("\n"));
+  if (onChanged.length) process.exit(1);
 }
 
 function usage() {
@@ -534,7 +586,9 @@ function usage() {
   upgrade [vX.Y.Z]                         re-pin (optional) and refresh skills, hooks, and rules from the engine
   timed <label> <seconds> -- <cmd...>      run cmd, warn (or fail with JANGKAR_ENFORCE_BUDGETS=1) when over budget
   mutation-scope <base-ref>                changed src/core sources since base, comma-separated, for stryker --mutate
-  mutation-summary [report] [--trend f]    markdown score and survivors from a Stryker JSON report; append to a trend file
+  mutation-summary [report] [--trend f] [--changed-since base]
+                                           markdown score and survivors from a Stryker JSON report; append to a trend
+                                           file; exit 1 if a mutant survives on a line changed since base
 `);
 }
 
