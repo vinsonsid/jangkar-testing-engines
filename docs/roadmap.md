@@ -4,7 +4,11 @@ The grand plan for `jangkar-testing-engines`. It says where the engine is, where
 
 Dates are deliberately absent. Each phase has exit criteria instead. A phase is done when its criteria hold on the engine and on at least one adopter.
 
-## 0. Where we are (v0.1.0, released 2026-09-19)
+## 0. Where we are
+
+> **Status 2026-11-20 (v0.6.0):** phase 0 and phase 1 hardening are done. Phase 0 exit: [decision 0007](./decisions/0007-first-catch.md), the first real defect caught on yespajak. Phase 1 exit: [decision 0008](./decisions/0008-phase-1-bad-pr-test.md), nine deliberately bad PRs, all failed by CI without review. Scope changes: [decision 0006](./decisions/0006-phase-1-scope.md). Next: phase 2 (web), since yespajak has no LLM feature. The snapshot below is from v0.1.0 and is kept for history.
+
+### Snapshot at v0.1.0 (2026-09-19)
 
 Shipped and self-tested:
 
@@ -34,7 +38,7 @@ Honest gaps, in order of how much they weaken the gate today:
 
 ## 2. Phases
 
-### Phase 0: prove the gate on a real feature
+### Phase 0: prove the gate on a real feature (done 2026-11-20)
 
 Goal: the engine catches at least one real defect or fake test on `yespajak` before any new capability is built. Nothing else is worth doing if this fails.
 
@@ -50,7 +54,7 @@ Exit criteria:
 - One merged `yespajak` PR whose history shows spec, red tests, green tests, auditor findings resolved.
 - A written note of the first thing the gate caught. If it caught nothing, the phase is not done: tighten until it does.
 
-### Phase 1 hardening (v0.2.x): make the current promises mechanical
+### Phase 1 hardening (v0.2.x–v0.6.0): make the current promises mechanical (done 2026-11-20)
 
 Goal: every rule in `testing-standard.md` sections 2, 5, and 6 fails CI without a reviewer.
 

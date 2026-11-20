@@ -32,6 +32,15 @@ The rewritten tests checked `pph === bruto × tarifDipakai / 100`, using the fun
 
 Both gates were run against #12's real CI mutation report and branch, and each one fails it on its own. Both pass on yespajak `main`, where all 46 ACs across 6 specs are named.
 
+Confirmed in CI after yespajak moved to v0.6.0:
+
+| PR | Change | Result |
+|---|---|---|
+| #12, rebased | unchanged | fails at doctor: "every spec AC is named in a test" (pph23 AC1–AC6) |
+| #14 | #12 with the AC labels kept in the test title, so doctor passes | fails only at mutation: "1 mutant(s) survive on lines this branch changed", `pph23.ts:92` |
+
+#14 went through the local pre-commit hook without `--no-verify`, and the hook let it pass. Hooks do not run mutation testing, so CI is the only place this is caught. All nine test PRs were closed unmerged.
+
 ## What it does not catch
 
 A PR can keep the AC labels and still write self-referential assertions on a line it did not change. That is the auditor's job: the `test-auditor` checklist item "Tautology" catches it. The phase 1 exit claim is narrower: a bad PR in any of these eight shapes fails CI without review.
